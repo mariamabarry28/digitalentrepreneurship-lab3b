@@ -23,7 +23,7 @@ app.post('/register', async (req, res) => {
     console.log(`Received registration request for email: ${email}`);
 
     // Email validation
-    const emailPattern = /@(spelman\.edu|morehouse\.edu)$/;
+    const emailPattern = /@(spelman\.edu|morehouse\.edu)$/i;;
     if (!emailPattern.test(email)) {
         return res.status(400).json({ success: false, message: 'Email must end with @spelman.edu or @morehouse.edu.' });
     }
@@ -35,6 +35,7 @@ app.post('/register', async (req, res) => {
             password,
             options: { data: { name } } // Store additional user info
         });
+        
 
         if (error) throw error;
 
@@ -50,15 +51,14 @@ app.post('/login', async (req, res) => {
     const { email, password } = req.body;
     console.log(`Received login request for email: ${email}`);
 
-    try {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-        res.json({ success: true, message: 'Login successful', user: data.user });
-    } catch (error) {
+    if (error) {
         console.error('Login error:', error);
-        res.status(401).json({ success: false, message: 'Invalid email or password' });
+        return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
+
+    res.json({ success: true, message: 'Login successful', user: data.user, session: data.session });
 });
 
 // Email verification using 6-digit code
@@ -86,7 +86,7 @@ app.post('/verify', async (req, res) => {
 });
 
 // Fallback route to serve React frontend for any unmatched routes
-app.get('*', (req, res) => {
+app.get('/*splat', (req, res) => {
     res.sendFile(path.join(__dirname, '../client/build/index.html'));
 });
 
