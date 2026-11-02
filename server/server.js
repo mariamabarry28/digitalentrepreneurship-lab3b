@@ -1,8 +1,6 @@
 // Import required modules
 const express = require('express');
 const path = require('path');
-const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
 
 // Initialize Supabase client
 const { createClient } = require("@supabase/supabase-js");
@@ -60,7 +58,7 @@ app.post('/login', async (req, res) => {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
 
-        res.json({ success: true, message: 'Login successful', user: data.user });
+        res.json({ success: true, message: 'Login successful', user: data.user, token: data.session.access_token });
     } catch (error) {
         console.error('Login error:', error);
         res.status(401).json({ success: false, message: 'Invalid email or password' });
@@ -84,7 +82,7 @@ app.post('/verify', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Invalid verification code.' });
         }
 
-        res.json({ success: true, message: 'Email verified successfully' });
+        res.json({ success: true, message: 'Email verified successfully', token: data.session?.access_token });
     } catch (error) {
         console.error('Verification error:', error);
         res.status(500).json({ success: false, message: 'Error verifying email' });
@@ -92,7 +90,53 @@ app.post('/verify', async (req, res) => {
 });
 
 // Fallback route to serve React frontend for any unmatched routes
-app.get('*', (req, res) => {
+// ========================================================
+// Message Board Routes
+// ========================================================
+
+// Work out who is logged in from the token the browser sends
+async function getUserFromRequest(req) {
+    const token = (req.headers.authorization || '').replace('Bearer ', '');
+    if (!token) return null;
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error) return null;
+    return data.user;
+}
+
+// Get the 20 latest messages
+app.get('/messages', async (req, res) => {
+    const user = await getUserFromRequest(req);
+    if (!user) return res.status(401).json({ error: 'Please log in' });
+
+    const { data, error } = await supabase
+        .from('messages')
+        .select('id, content, email, created_at')
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+});
+
+// Post a new message
+app.post('/messages', async (req, res) => {
+    const user = await getUserFromRequest(req);
+    if (!user) return res.status(401).json({ error: 'Please log in' });
+
+    const content = (req.body.content || '').trim();
+    if (!content || content.length > 500) {
+        return res.status(400).json({ error: 'Message must be 1 to 500 characters' });
+    }
+
+    const { error } = await supabase
+        .from('messages')
+        .insert({ user_id: user.id, email: user.email, content });
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.status(201).json({ ok: true });
+});
+// Fallback: serve the React app for any other route
+app.use((req, res) => {
     res.sendFile(path.join(__dirname, '../client/build/index.html'));
 });
 
