@@ -17,7 +17,6 @@ function Dashboard({ name, email, token, onLogout }) {
 
   useEffect(() => {
     loadMessages();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleSubmit(e) {
